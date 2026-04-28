@@ -68,22 +68,17 @@ public final class WaitSpinningHelper {
             if (spin < yieldLimit && spin > 1) {
                 Thread.yield();
             } else if (block) {
-/*
-                synchronized (mutex) {
-                    sequenceBarrier.checkAlert();
-                    mutex.wait();
-                }
-*/
                 lock.lock();
                 try {
                     sequenceBarrier.checkAlert();
-                    // lock only if sequence barrier did not progressed since last check
                     if (availableSequence == sequenceBarrier.getCursor()) {
                         processorNotifyCondition.await();
                     }
                 } finally {
                     lock.unlock();
                 }
+            } else {
+                Thread.onSpinWait();
             }
 
             spin--;

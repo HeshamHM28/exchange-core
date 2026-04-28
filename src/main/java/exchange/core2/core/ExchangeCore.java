@@ -66,7 +66,7 @@ public final class ExchangeCore {
     private boolean stopped = false;
 
     // enable MatcherTradeEvent pooling
-    public static final boolean EVENTS_POOLING = false;
+    public static final boolean EVENTS_POOLING = true;
 
     /**
      * Exchange core constructor.
@@ -93,7 +93,7 @@ public final class ExchangeCore {
                 OrderCommand::new,
                 ringBufferSize,
                 threadFactory,
-                ProducerType.MULTI, // multiple gateway threads are writing
+                perfCfg.isSingleProducer() ? ProducerType.SINGLE : ProducerType.MULTI,
                 coreWaitStrategy.getDisruptorWaitStrategyFactory().get());
 
         this.ringBuffer = disruptor.getRingBuffer();

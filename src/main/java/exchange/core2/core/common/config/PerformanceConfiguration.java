@@ -90,6 +90,12 @@ public final class PerformanceConfiguration {
     private final IOrderBook.OrderBookFactory orderBookFactory;
 
     /*
+     * Use single-producer ring buffer (faster, no CAS on publish).
+     * Only safe when a single thread publishes commands.
+     */
+    private final boolean singleProducer;
+
+    /*
      * LZ4 compressor factory for binary commands and reports
      */
     private final Supplier<LZ4Compressor> binaryCommandsLz4CompressorFactory;
@@ -104,6 +110,7 @@ public final class PerformanceConfiguration {
                 ", maxGroupDurationNs=" + maxGroupDurationNs +
                 ", sendL2ForEveryCmd=" + sendL2ForEveryCmd +
                 ", l2RefreshDepth=" + l2RefreshDepth +
+                ", singleProducer=" + singleProducer +
                 ", threadFactory=" + (threadFactory == null ? null : threadFactory.getClass().getSimpleName()) +
                 ", waitStrategy=" + waitStrategy +
                 ", orderBookFactory=" + (orderBookFactory == null ? null : orderBookFactory.getClass().getSimpleName()) +
@@ -123,6 +130,7 @@ public final class PerformanceConfiguration {
                 .maxGroupDurationNs(10_000)
                 .sendL2ForEveryCmd(false)
                 .l2RefreshDepth(8)
+                .singleProducer(false)
                 .threadFactory(Thread::new)
                 .waitStrategy(CoreWaitStrategy.BLOCKING)
                 .binaryCommandsLz4CompressorFactory(() -> LZ4Factory.fastestInstance().highCompressor())
@@ -139,6 +147,7 @@ public final class PerformanceConfiguration {
                 .maxGroupDurationNs(10_000)
                 .sendL2ForEveryCmd(false)
                 .l2RefreshDepth(8)
+                .singleProducer(false)
                 .threadFactory(new AffinityThreadFactory(AffinityThreadFactory.ThreadAffinityMode.THREAD_AFFINITY_ENABLE_PER_LOGICAL_CORE))
                 .waitStrategy(CoreWaitStrategy.BUSY_SPIN)
                 .binaryCommandsLz4CompressorFactory(() -> LZ4Factory.fastestInstance().highCompressor())
@@ -155,6 +164,7 @@ public final class PerformanceConfiguration {
                 .maxGroupDurationNs(4_000_000)
                 .sendL2ForEveryCmd(false)
                 .l2RefreshDepth(8)
+                .singleProducer(false)
                 .threadFactory(new AffinityThreadFactory(AffinityThreadFactory.ThreadAffinityMode.THREAD_AFFINITY_ENABLE_PER_LOGICAL_CORE))
                 .waitStrategy(CoreWaitStrategy.BUSY_SPIN)
                 .binaryCommandsLz4CompressorFactory(() -> LZ4Factory.fastestInstance().highCompressor())

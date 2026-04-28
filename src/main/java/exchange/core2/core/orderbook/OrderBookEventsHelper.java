@@ -188,10 +188,10 @@ public final class OrderBookEventsHelper {
         if (EVENTS_POOLING) {
             if (eventsChainHead == null) {
                 eventsChainHead = eventChainsSupplier.get();
-//            log.debug("UPDATED HEAD size={}", eventsChainHead == null ? 0 : eventsChainHead.getChainSize());
             }
             final MatcherTradeEvent res = eventsChainHead;
             eventsChainHead = eventsChainHead.nextEvent;
+            res.nextEvent = null;
             return res;
         } else {
             return new MatcherTradeEvent();

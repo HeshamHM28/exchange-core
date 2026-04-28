@@ -15,6 +15,7 @@
  */
 package exchange.core2.tests.perf;
 
+import exchange.core2.core.common.CoreWaitStrategy;
 import exchange.core2.core.common.config.InitialStateConfiguration;
 import exchange.core2.core.common.config.PerformanceConfiguration;
 import exchange.core2.core.common.config.SerializationConfiguration;
@@ -38,9 +39,12 @@ public final class PerfThroughput {
     public void testThroughputMargin() {
         ThroughputTestsModule.throughputTestImpl(
                 PerformanceConfiguration.throughputPerformanceBuilder()
-                        .ringBufferSize(32 * 1024)
+                        .ringBufferSize(64 * 1024)
                         .matchingEnginesNum(1)
                         .riskEnginesNum(1)
+                        .msgsInGroupLimit(8_192)
+                        .singleProducer(true)
+                        .waitStrategy(CoreWaitStrategy.YIELDING)
                         .build(),
                 TestDataParameters.singlePairMarginBuilder().build(),
                 InitialStateConfiguration.CLEAN_TEST,

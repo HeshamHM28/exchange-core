@@ -170,47 +170,52 @@ public final class MatchingEngineRouter implements WriteBytesMarshallable {
 
     public void processOrder(long seq, OrderCommand cmd) {
 
-        final OrderCommandType command = cmd.command;
+        switch (cmd.command) {
+            case MOVE_ORDER:
+            case CANCEL_ORDER:
+            case PLACE_ORDER:
+            case REDUCE_ORDER:
+            case ORDER_BOOK_REQUEST:
+                if (symbolForThisHandler(cmd.symbol)) {
+                    processMatchingCommand(cmd);
+                }
+                break;
 
-        if (command == OrderCommandType.MOVE_ORDER
-                || command == OrderCommandType.CANCEL_ORDER
-                || command == OrderCommandType.PLACE_ORDER
-                || command == OrderCommandType.REDUCE_ORDER
-                || command == OrderCommandType.ORDER_BOOK_REQUEST) {
-            // process specific symbol group only
-            if (symbolForThisHandler(cmd.symbol)) {
-                processMatchingCommand(cmd);
-            }
-        } else if (command == OrderCommandType.BINARY_DATA_QUERY || command == OrderCommandType.BINARY_DATA_COMMAND) {
+            case BINARY_DATA_QUERY:
+            case BINARY_DATA_COMMAND:
+                final CommandResultCode resultCode = binaryCommandsProcessor.acceptBinaryFrame(cmd);
+                if (shardId == 0) {
+                    cmd.resultCode = resultCode;
+                }
+                break;
 
-            final CommandResultCode resultCode = binaryCommandsProcessor.acceptBinaryFrame(cmd);
-            if (shardId == 0) {
-                cmd.resultCode = resultCode;
-            }
+            case RESET:
+                orderBooks.clear();
+                binaryCommandsProcessor.reset();
+                if (shardId == 0) {
+                    cmd.resultCode = CommandResultCode.SUCCESS;
+                }
+                break;
 
-        } else if (command == OrderCommandType.RESET) {
-            // process all symbols groups, only processor 0 writes result
-            orderBooks.clear();
-            binaryCommandsProcessor.reset();
-            if (shardId == 0) {
-                cmd.resultCode = CommandResultCode.SUCCESS;
-            }
+            case NOP:
+                if (shardId == 0) {
+                    cmd.resultCode = CommandResultCode.SUCCESS;
+                }
+                break;
 
-        } else if (command == OrderCommandType.NOP) {
-            if (shardId == 0) {
-                cmd.resultCode = CommandResultCode.SUCCESS;
-            }
+            case PERSIST_STATE_MATCHING:
+                final boolean isSuccess = serializationProcessor.storeData(
+                        cmd.orderId,
+                        seq,
+                        cmd.timestamp,
+                        ISerializationProcessor.SerializedModuleType.MATCHING_ENGINE_ROUTER,
+                        shardId,
+                        this);
+                UnsafeUtils.setResultVolatile(cmd, isSuccess, CommandResultCode.ACCEPTED, CommandResultCode.STATE_PERSIST_MATCHING_ENGINE_FAILED);
+                break;
 
-        } else if (command == OrderCommandType.PERSIST_STATE_MATCHING) {
-            final boolean isSuccess = serializationProcessor.storeData(
-                    cmd.orderId,
-                    seq,
-                    cmd.timestamp,
-                    ISerializationProcessor.SerializedModuleType.MATCHING_ENGINE_ROUTER,
-                    shardId,
-                    this);
-            // Send ACCEPTED because this is a first command in series. Risk engine is second - so it will return SUCCESS
-            UnsafeUtils.setResultVolatile(cmd, isSuccess, CommandResultCode.ACCEPTED, CommandResultCode.STATE_PERSIST_MATCHING_ENGINE_FAILED);
+            default:
+                break;
         }
 
     }
