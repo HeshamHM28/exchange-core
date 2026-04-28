@@ -93,7 +93,7 @@ public final class ExchangeCore {
                 OrderCommand::new,
                 ringBufferSize,
                 threadFactory,
-                ProducerType.MULTI, // multiple gateway threads are writing
+                perfCfg.isSingleProducer() ? ProducerType.SINGLE : ProducerType.MULTI,
                 coreWaitStrategy.getDisruptorWaitStrategyFactory().get());
 
         this.ringBuffer = disruptor.getRingBuffer();

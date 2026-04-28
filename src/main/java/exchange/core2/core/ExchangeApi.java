@@ -177,8 +177,48 @@ public final class ExchangeApi {
             return;
         }
 
-        cmd.subList(0, cmd.size() - 1).forEach(this::submitCommand);
-        submitCommandAsync(cmd.get(cmd.size() - 1)).join();
+        final int size = cmd.size();
+        final int batchSize = 1024;
+
+        int i = 0;
+        while (i < size - 1) {
+            final int remaining = size - 1 - i;
+            final int n = Math.min(remaining, batchSize);
+            final long hi = ringBuffer.next(n);
+            final long lo = hi - (n - 1);
+            for (long seq = lo; seq <= hi; seq++) {
+                translateCommand(ringBuffer.get(seq), seq, cmd.get(i++));
+            }
+            ringBuffer.publish(lo, hi);
+        }
+
+        submitCommandAsync(cmd.get(size - 1)).join();
+    }
+
+    private void translateCommand(final OrderCommand oc, final long seq, final ApiCommand api) {
+        if (api instanceof ApiMoveOrder) {
+            MOVE_ORDER_TRANSLATOR.translateTo(oc, seq, (ApiMoveOrder) api);
+        } else if (api instanceof ApiPlaceOrder) {
+            NEW_ORDER_TRANSLATOR.translateTo(oc, seq, (ApiPlaceOrder) api);
+        } else if (api instanceof ApiCancelOrder) {
+            CANCEL_ORDER_TRANSLATOR.translateTo(oc, seq, (ApiCancelOrder) api);
+        } else if (api instanceof ApiReduceOrder) {
+            REDUCE_ORDER_TRANSLATOR.translateTo(oc, seq, (ApiReduceOrder) api);
+        } else if (api instanceof ApiOrderBookRequest) {
+            ORDER_BOOK_REQUEST_TRANSLATOR.translateTo(oc, seq, (ApiOrderBookRequest) api);
+        } else if (api instanceof ApiAddUser) {
+            ADD_USER_TRANSLATOR.translateTo(oc, seq, (ApiAddUser) api);
+        } else if (api instanceof ApiAdjustUserBalance) {
+            ADJUST_USER_BALANCE_TRANSLATOR.translateTo(oc, seq, (ApiAdjustUserBalance) api);
+        } else if (api instanceof ApiResumeUser) {
+            RESUME_USER_TRANSLATOR.translateTo(oc, seq, (ApiResumeUser) api);
+        } else if (api instanceof ApiSuspendUser) {
+            SUSPEND_USER_TRANSLATOR.translateTo(oc, seq, (ApiSuspendUser) api);
+        } else if (api instanceof ApiReset) {
+            RESET_TRANSLATOR.translateTo(oc, seq, (ApiReset) api);
+        } else if (api instanceof ApiNop) {
+            NOP_TRANSLATOR.translateTo(oc, seq, (ApiNop) api);
+        }
     }
 
     public void submitCommandsSync(Stream<? extends ApiCommand> stream) {
