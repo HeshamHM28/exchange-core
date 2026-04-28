@@ -253,20 +253,15 @@ public final class OrderBookDirectImpl implements IOrderBook {
         DirectOrder priceBucketTail = makerOrder.parent.tail;
 
         final long takerReserveBidPrice = takerOrder.getReserveBidPrice();
-//        final long takerOrderTimestamp = takerOrder.getTimestamp();
-
-//        log.debug("MATCHING taker: {} remainingSize={}", takerOrder, remainingSize);
+        final LongAdaptiveRadixTreeMap<Bucket> buckets = isBidAction ? askPriceBuckets : bidPriceBuckets;
 
         MatcherTradeEvent eventsTail = null;
 
         // iterate through all orders
         do {
 
-//            log.debug("  matching from maker order: {}", makerOrder);
-
             // calculate exact volume can fill for this order
             final long tradeSize = Math.min(remainingSize, makerOrder.size - makerOrder.filled);
-//                log.debug("  tradeSize: {} MIN(remainingSize={}, makerOrder={})", tradeSize, remainingSize, makerOrder.size - makerOrder.filled);
 
             makerOrder.filled += tradeSize;
             makerOrder.parent.volume -= tradeSize;
@@ -289,8 +284,6 @@ public final class OrderBookDirectImpl implements IOrderBook {
             eventsTail = tradeEvent;
 
             if (!makerCompleted) {
-                // maker not completed -> no unmatched volume left, can exit matching loop
-//                    log.debug("  not completed, exit");
                 break;
             }
 
@@ -301,7 +294,6 @@ public final class OrderBookDirectImpl implements IOrderBook {
 
             if (makerOrder == priceBucketTail) {
                 // reached current price tail -> remove bucket reference
-                final LongAdaptiveRadixTreeMap<Bucket> buckets = isBidAction ? askPriceBuckets : bidPriceBuckets;
                 buckets.remove(makerOrder.price);
                 objectsPool.put(ObjectsPool.DIRECT_BUCKET, makerOrder.parent);
 //                log.debug("  removed price bucket for {}", makerOrder.price);
@@ -419,14 +411,19 @@ public final class OrderBookDirectImpl implements IOrderBook {
             return CommandResultCode.MATCHING_MOVE_FAILED_PRICE_OVER_RISK_LIMIT;
         }
 
-        // remove order
+        // fill action fields (for events handling)
+        cmd.action = orderToMove.getAction();
+
+        // same-price fast path: no structural change needed
+        if (newPrice == orderToMove.price) {
+            return CommandResultCode.SUCCESS;
+        }
+
+        // remove order from current position
         final Bucket freeBucket = removeOrder(orderToMove);
 
         // update price
         orderToMove.price = newPrice;
-
-        // fill action fields (for events handling)
-        cmd.action = orderToMove.getAction();
 
         // fast path: if new price doesn't cross the spread, skip matching attempt
         final boolean isBid = orderToMove.action == OrderAction.BID;
