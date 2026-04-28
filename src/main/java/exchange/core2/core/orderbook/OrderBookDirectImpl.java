@@ -65,6 +65,9 @@ public final class OrderBookDirectImpl implements IOrderBook {
 
     private final boolean logDebug;
 
+    private static final Supplier<DirectOrder> DIRECT_ORDER_SUPPLIER = DirectOrder::new;
+    private static final Supplier<Bucket> BUCKET_SUPPLIER = Bucket::new;
+
     public OrderBookDirectImpl(final CoreSymbolSpecification symbolSpec,
                                final ObjectsPool objectsPool,
                                final OrderBookEventsHelper eventsHelper,
@@ -143,7 +146,7 @@ public final class OrderBookDirectImpl implements IOrderBook {
         final long price = cmd.price;
 
         // normally placing regular GTC order
-        final DirectOrder orderRecord = objectsPool.get(ObjectsPool.DIRECT_ORDER, (Supplier<DirectOrder>) DirectOrder::new);
+        final DirectOrder orderRecord = objectsPool.get(ObjectsPool.DIRECT_ORDER, DIRECT_ORDER_SUPPLIER);
 
         orderRecord.orderId = orderId;
         orderRecord.price = price;
@@ -409,8 +412,10 @@ public final class OrderBookDirectImpl implements IOrderBook {
             return CommandResultCode.MATCHING_UNKNOWN_ORDER_ID;
         }
 
+        final long newPrice = cmd.price;
+
         // risk check for exchange bids
-        if (symbolSpec.type == SymbolType.CURRENCY_EXCHANGE_PAIR && orderToMove.action == OrderAction.BID && cmd.price > orderToMove.reserveBidPrice) {
+        if (symbolSpec.type == SymbolType.CURRENCY_EXCHANGE_PAIR && orderToMove.action == OrderAction.BID && newPrice > orderToMove.reserveBidPrice) {
             return CommandResultCode.MATCHING_MOVE_FAILED_PRICE_OVER_RISK_LIMIT;
         }
 
@@ -418,23 +423,29 @@ public final class OrderBookDirectImpl implements IOrderBook {
         final Bucket freeBucket = removeOrder(orderToMove);
 
         // update price
-        orderToMove.price = cmd.price;
+        orderToMove.price = newPrice;
 
         // fill action fields (for events handling)
         cmd.action = orderToMove.getAction();
 
-        // try match with new price as a taker order
-        final long filled = tryMatchInstantly(orderToMove, cmd);
-        if (filled == orderToMove.size) {
-            // order was fully matched - removing
-            orderIdIndex.remove(cmd.orderId);
-            // returning free object back to the pool
-            objectsPool.put(ObjectsPool.DIRECT_ORDER, orderToMove);
-            return CommandResultCode.SUCCESS;
+        // fast path: if new price doesn't cross the spread, skip matching attempt
+        final boolean isBid = orderToMove.action == OrderAction.BID;
+        final boolean canMatch;
+        if (isBid) {
+            canMatch = bestAskOrder != null && newPrice >= bestAskOrder.price;
+        } else {
+            canMatch = bestBidOrder != null && newPrice <= bestBidOrder.price;
         }
 
-        // not filled completely, inserting into new position
-        orderToMove.filled = filled;
+        if (canMatch) {
+            final long filled = tryMatchInstantly(orderToMove, cmd);
+            if (filled == orderToMove.size) {
+                orderIdIndex.remove(cmd.orderId);
+                objectsPool.put(ObjectsPool.DIRECT_ORDER, orderToMove);
+                return CommandResultCode.SUCCESS;
+            }
+            orderToMove.filled = filled;
+        }
 
         // insert into a new place
         insertOrder(orderToMove, freeBucket);
@@ -519,7 +530,7 @@ public final class OrderBookDirectImpl implements IOrderBook {
             // insert a new bucket (reuse existing)
             final Bucket newBucket = freeBucket != null
                     ? freeBucket
-                    : objectsPool.get(ObjectsPool.DIRECT_BUCKET, Bucket::new);
+                    : objectsPool.get(ObjectsPool.DIRECT_BUCKET, BUCKET_SUPPLIER);
 
             newBucket.tail = order;
             newBucket.volume = order.size - order.filled;

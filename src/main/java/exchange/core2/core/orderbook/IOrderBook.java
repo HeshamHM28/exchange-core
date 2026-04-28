@@ -175,36 +175,31 @@ public interface IOrderBook extends WriteBytesMarshallable, StateHash {
 
     static CommandResultCode processCommand(final IOrderBook orderBook, final OrderCommand cmd) {
 
-        final OrderCommandType commandType = cmd.command;
+        switch (cmd.command) {
+            case MOVE_ORDER:
+                return orderBook.moveOrder(cmd);
 
-        if (commandType == OrderCommandType.MOVE_ORDER) {
+            case CANCEL_ORDER:
+                return orderBook.cancelOrder(cmd);
 
-            return orderBook.moveOrder(cmd);
+            case REDUCE_ORDER:
+                return orderBook.reduceOrder(cmd);
 
-        } else if (commandType == OrderCommandType.CANCEL_ORDER) {
+            case PLACE_ORDER:
+                if (cmd.resultCode == CommandResultCode.VALID_FOR_MATCHING_ENGINE) {
+                    orderBook.newOrder(cmd);
+                    return CommandResultCode.SUCCESS;
+                } else {
+                    return cmd.resultCode;
+                }
 
-            return orderBook.cancelOrder(cmd);
-
-        } else if (commandType == OrderCommandType.REDUCE_ORDER) {
-
-            return orderBook.reduceOrder(cmd);
-
-        } else if (commandType == OrderCommandType.PLACE_ORDER) {
-
-            if (cmd.resultCode == CommandResultCode.VALID_FOR_MATCHING_ENGINE) {
-                orderBook.newOrder(cmd);
+            case ORDER_BOOK_REQUEST:
+                int size = (int) cmd.size;
+                cmd.marketData = orderBook.getL2MarketDataSnapshot(size >= 0 ? size : Integer.MAX_VALUE);
                 return CommandResultCode.SUCCESS;
-            } else {
-                return cmd.resultCode; // no change
-            }
 
-        } else if (commandType == OrderCommandType.ORDER_BOOK_REQUEST) {
-            int size = (int) cmd.size;
-            cmd.marketData = orderBook.getL2MarketDataSnapshot(size >= 0 ? size : Integer.MAX_VALUE);
-            return CommandResultCode.SUCCESS;
-
-        } else {
-            return CommandResultCode.MATCHING_UNSUPPORTED_COMMAND;
+            default:
+                return CommandResultCode.MATCHING_UNSUPPORTED_COMMAND;
         }
 
     }

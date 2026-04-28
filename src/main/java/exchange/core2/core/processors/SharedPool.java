@@ -62,7 +62,6 @@ public final class SharedPool {
      */
     public MatcherTradeEvent getChain() {
         MatcherTradeEvent poll = eventChainsBuffer.poll();
-//        log.debug("<<< POLL CHAIN HEAD  size={}", poll == null ? 0 : poll.getChainSize());
         if (poll == null) {
             poll = MatcherTradeEvent.createEventChain(chainLength);
         }
@@ -78,7 +77,6 @@ public final class SharedPool {
      */
     public void putChain(MatcherTradeEvent head) {
         boolean offer = eventChainsBuffer.offer(head);
-//        log.debug(">>> OFFER CHAIN HEAD  size={} orrder={}", head.getChainSize(), offer);
     }
 
 }
